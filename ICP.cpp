@@ -25,27 +25,6 @@ void image2point(int i, int j, float depth, Eigen::Vector3d & rtn){
     rtn = depth * Ki * tmp;//formula given
 }
 
-void depth2cloud(const Eigen::ArrayXXf depth,std::vector<Eigen::Vector3d> &cloud){
-    int width = depth.cols();
-    int height = depth.rows();
-    for (int i = 0; i < height; ++i)
-    {
-        for (int j = 0; j < width; ++j)
-        {
-            if (depth(i,j)<0||rand()%50!=1)
-            {
-                cloud[j+i*width] = Eigen::Vector3d(0,0,0);//if the point's depth is -1, means measure error
-            }
-            //if we need random reduction maybe we can reduce it to Eigen::Vector3d(0,0,0)
-            else
-            {
-                image2point(i,j,depth(i,j),cloud[j+i*width]);// TODO: Maybe issue of coordinates!!!!!!!!!!!!!!!!!!!!!!!!!
-            }
-        }
-    }
-}
-
-
 void transform(std::vector<Eigen::Vector3d> & cloud, Eigen::Matrix3d rotation,Eigen::Vector3d translation){
     for (int i = 0; i < cloud.size(); ++i)
     {
@@ -57,22 +36,24 @@ void transform(std::vector<Eigen::Vector3d> & cloud, Eigen::Matrix3d rotation,Ei
 
 void recover_by_q_and_pose(Eigen::Vector3d& t, Eigen::Quaterniond q, Eigen::Vector3d& pose, Eigen::Vector3d& output)
 {
+    q.normalize();
     Eigen::Vector3d dst;
     dst = t - pose;
     Eigen::Quaterniond p;
     p.w() = 0;
     p.vec() = dst;
-    Eigen::Quaterniond rotatedP = q.inverse() * p * q;
+    Eigen::Quaterniond rotatedP = q.conjugate() * p * q;
     output = rotatedP.vec();
 }
 
 void rotate_by_q_and_pose(Eigen::Vector3d& dst, Eigen::Quaterniond q, Eigen::Vector3d& pose, Eigen::Vector3d& output)
 {
+    q.normalize();
     // Eigen::Vector3d dst;
     Eigen::Quaterniond p;
     p.w() = 0;
     p.vec() = dst;
-    Eigen::Quaterniond rotatedP = q * p * q.inverse();
+    Eigen::Quaterniond rotatedP = q * p * q.conjugate();
     output = rotatedP.vec();
     output += pose;
 }
@@ -108,6 +89,22 @@ void find_corr(Eigen::ArrayXXf& depth, Eigen::Quaterniond& r1, Eigen::Quaternion
         }
     }
     cout << "done one pair" << endl;
+}
+
+void output_to_file(string depth_0,string depth_1, string rgb_0, string rgb_1, Eigen::Matrix<Eigen::Vector2d,Eigen::Dynamic,Eigen::Dynamic>& corr)
+{
+    ofstream fout(".."+depth_0+".txt");
+    fout << depth_0 << " " << depth_1 <<" " << rgb_0 << " " << rgb_1 << endl;
+    for (int i = 0; i < PNGheight; ++i)
+    {
+        for (int j = 0; j < PNGwidth; ++j)
+        {
+            // Iterate each point
+            fout << corr(i,j).transpose() <<endl;
+
+        }
+    }
+
 }
 
 void visualize_correspondence(Mat img_0,Mat img_1, Eigen::Matrix<Eigen::Vector2d,Eigen::Dynamic,Eigen::Dynamic>& corr)
@@ -194,6 +191,7 @@ int main(int argc, char const *argv[])
             //     cout << depthfile_0 << endl;
             //     if (a == depthfile_0)
             //     {
+            output_to_file(depthfile_0,depthfile_1,rgbfile_0,rgbfile_1,output);
             Mat img_0 = imread("../rgbd_dataset_freiburg2_desk/"+rgbfile_0);
             Mat img_1 = imread("../rgbd_dataset_freiburg2_desk/"+rgbfile_1);
             visualize_correspondence(img_0, img_1,output);
